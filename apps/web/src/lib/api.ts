@@ -60,6 +60,29 @@ export const auth = {
 
   updateMe: (body: { name?: string; locale?: string; currency?: string }) =>
     request<UserPublic>("/auth/me", { method: "PATCH", headers: authHeaders(), body: JSON.stringify(body) }),
+
+  forgotPassword: (email: string) =>
+    request<{ message: string }>("/auth/forgot-password", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    }),
+
+  resetPassword: (token: string, new_password: string) =>
+    request<{ message: string }>("/auth/reset-password", {
+      method: "POST",
+      body: JSON.stringify({ token, new_password }),
+    }),
+
+  sendVerification: () =>
+    request<{ message: string }>("/auth/send-verification", {
+      method: "POST",
+      headers: authHeaders(),
+    }),
+
+  getUsage: (days = 30) =>
+    request<{ date: string; tokens_used: number }[]>(`/auth/usage?days=${days}`, {
+      headers: authHeaders(),
+    }),
 };
 
 // --- Apps ---

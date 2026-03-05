@@ -1,12 +1,15 @@
 import json
+from datetime import date, timezone, datetime
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from pydantic import BaseModel
 from typing import List, Optional
 
 from app.db.database import get_db
 from app.models.builder import BuilderSession, BuilderMessage, MessageRole
+from app.models.usage_log import TokenUsageDaily
 from app.models.user import User, PlanType
 from app.api.v1.deps import get_current_user
 from app.services.builder_prompt import SYSTEM_PROMPT
@@ -60,18 +63,30 @@ def _check_quota(user: User):
         )
 
 
-def _deduct_tokens(user: User, tokens_used: int):
-    """Deduct tokens: monthly allocation first, then topup balance."""
+def _deduct_tokens(db: Session, user: User, tokens_used: int):
+    """Deduct tokens: monthly allocation first, then topup balance. Also logs daily usage."""
     monthly_limit     = MONTHLY_TOKEN_LIMITS[user.plan]
     monthly_remaining = max(0, monthly_limit - user.tokens_used_month)
 
     if tokens_used <= monthly_remaining:
         user.tokens_used_month += tokens_used
     else:
-        # Exhaust remaining monthly tokens, deduct overflow from topup
         overflow = tokens_used - monthly_remaining
         user.tokens_used_month = monthly_limit
         user.tokens_topup_balance = max(0, user.tokens_topup_balance - overflow)
+
+    # Log to daily usage table (upsert)
+    today = date.today()
+    stmt = pg_insert(TokenUsageDaily).values(
+        user_id=user.id,
+        date=today,
+        tokens_used=tokens_used,
+    ).on_conflict_do_update(
+        constraint="uq_token_usage_user_date",
+        set_={"tokens_used": TokenUsageDaily.tokens_used + tokens_used,
+              "updated_at": datetime.now(timezone.utc)},
+    )
+    db.execute(stmt)
 
 
 def _get_session(db: Session, session_id: str, user: User) -> BuilderSession:
@@ -214,7 +229,7 @@ def chat(
 
                 # Update session model and deduct tokens (monthly first, then topup)
                 session.model_used = model_used
-                _deduct_tokens(current_user, total_tokens)
+                _deduct_tokens(db, current_user, total_tokens)
                 db.commit()
 
                 yield f"data: {json.dumps({'type': 'done', 'tokens': total_tokens, 'model': model_used})}\n\n"

@@ -27,6 +27,13 @@ class Settings(BaseSettings):
     STRIPE_PRICE_TEAM_GBP: str = ""
     STRIPE_PRICE_TEAM_BRL: str = ""
 
+    # Email (SMTP)
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM: str = "noreply@turion.network"
+
     # AI keys — router picks the best available
     ANTHROPIC_API_KEY: str = ""
     OPENAI_API_KEY: str = ""

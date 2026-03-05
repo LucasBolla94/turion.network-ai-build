@@ -6,15 +6,21 @@ from app.core.config import settings
 from app.db.database import engine, Base
 from app.api.v1.router import api_router
 
-import app.models.user       # noqa
-import app.models.app_project # noqa
-import app.models.builder     # noqa
-import app.models.app_file    # noqa
+import app.models.user               # noqa
+import app.models.app_project        # noqa
+import app.models.builder            # noqa
+import app.models.app_file           # noqa
+import app.models.password_reset     # noqa
+import app.models.email_verification # noqa
+import app.models.usage_log          # noqa
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    Base.metadata.create_all(bind=engine)
+    try:
+        Base.metadata.create_all(bind=engine, checkfirst=True)
+    except Exception:
+        pass  # tables already created by another worker
     yield
 
 
