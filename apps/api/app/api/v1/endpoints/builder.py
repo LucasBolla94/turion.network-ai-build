@@ -1,18 +1,16 @@
 import json
-import anthropic
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import List, Optional
-from uuid import UUID
 
-from app.core.config import settings
 from app.db.database import get_db
 from app.models.builder import BuilderSession, BuilderMessage, MessageRole
 from app.models.user import User, PlanType
 from app.api.v1.deps import get_current_user
 from app.services.builder_prompt import SYSTEM_PROMPT
+from app.services import router as llm_router
 
 router = APIRouter(prefix="/builder", tags=["AI Builder"])
 
@@ -23,7 +21,7 @@ TOKEN_LIMITS = {
 }
 
 
-# ── Schemas ──────────────────────────────────────────────
+# ── Schemas ───────────────────────────────────────────────────────────────────
 
 class NewSessionRequest(BaseModel):
     title: Optional[str] = "New App"
@@ -34,7 +32,6 @@ class SessionOut(BaseModel):
     title: str
     model_used: str
     created_at: str
-
     model_config = {"from_attributes": True}
 
 
@@ -43,7 +40,6 @@ class MessageOut(BaseModel):
     role: str
     content: str
     created_at: str
-
     model_config = {"from_attributes": True}
 
 
@@ -52,14 +48,14 @@ class ChatRequest(BaseModel):
     message: str
 
 
-# ── Helpers ───────────────────────────────────────────────
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _check_quota(user: User):
     limit = TOKEN_LIMITS[user.plan]
     if user.tokens_used_month >= limit:
         raise HTTPException(
             status_code=429,
-            detail=f"Monthly token limit reached ({limit:,}). Please upgrade your plan."
+            detail=f"Monthly token limit reached ({limit:,} tokens). Please upgrade your plan.",
         )
 
 
@@ -73,7 +69,7 @@ def _get_session(db: Session, session_id: str, user: User) -> BuilderSession:
     return s
 
 
-# ── Routes ────────────────────────────────────────────────
+# ── Routes ────────────────────────────────────────────────────────────────────
 
 @router.post("/sessions", response_model=SessionOut, status_code=201)
 def create_session(
@@ -81,20 +77,12 @@ def create_session(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Create a new AI builder chat session."""
-    session = BuilderSession(
-        owner_id=current_user.id,
-        title=body.title or "New App",
-    )
+    session = BuilderSession(owner_id=current_user.id, title=body.title or "New App")
     db.add(session)
     db.commit()
     db.refresh(session)
-    return SessionOut(
-        id=str(session.id),
-        title=session.title,
-        model_used=session.model_used,
-        created_at=str(session.created_at),
-    )
+    return SessionOut(id=str(session.id), title=session.title,
+                      model_used=session.model_used, created_at=str(session.created_at))
 
 
 @router.get("/sessions", response_model=List[SessionOut])
@@ -102,15 +90,15 @@ def list_sessions(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """List all sessions for the current user."""
-    sessions = (
+    rows = (
         db.query(BuilderSession)
         .filter(BuilderSession.owner_id == current_user.id)
         .order_by(BuilderSession.created_at.desc())
         .limit(50)
         .all()
     )
-    return [SessionOut(id=str(s.id), title=s.title, model_used=s.model_used, created_at=str(s.created_at)) for s in sessions]
+    return [SessionOut(id=str(s.id), title=s.title,
+                       model_used=s.model_used, created_at=str(s.created_at)) for s in rows]
 
 
 @router.get("/sessions/{session_id}/messages", response_model=List[MessageOut])
@@ -119,7 +107,6 @@ def get_messages(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Get all messages in a session."""
     _get_session(db, session_id, current_user)
     msgs = (
         db.query(BuilderMessage)
@@ -127,7 +114,8 @@ def get_messages(
         .order_by(BuilderMessage.created_at.asc())
         .all()
     )
-    return [MessageOut(id=str(m.id), role=m.role, content=m.content, created_at=str(m.created_at)) for m in msgs]
+    return [MessageOut(id=str(m.id), role=m.role, content=m.content,
+                       created_at=str(m.created_at)) for m in msgs]
 
 
 @router.delete("/sessions/{session_id}", status_code=204)
@@ -136,7 +124,6 @@ def delete_session(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Delete a session and all its messages."""
     session = _get_session(db, session_id, current_user)
     db.delete(session)
     db.commit()
@@ -149,15 +136,9 @@ def chat(
     db: Session = Depends(get_db),
 ):
     """
-    Send a message and get a streaming AI response (Server-Sent Events).
-    The response streams token by token so the UI can display it in real time.
+    Stream an AI response using RouteLLM.
+    Automatically picks the best model for the task and falls back if needed.
     """
-    if not settings.ANTHROPIC_API_KEY:
-        raise HTTPException(
-            status_code=503,
-            detail="AI service not configured. Please add ANTHROPIC_API_KEY to the server environment."
-        )
-
     _check_quota(current_user)
     session = _get_session(db, body.session_id, current_user)
 
@@ -170,13 +151,12 @@ def chat(
     db.add(user_msg)
     db.commit()
 
-    # Auto-update session title from first message
-    if session.title == "New App":
-        title = body.message[:60].strip()
-        session.title = title if len(title) > 3 else "New App"
+    # Auto-title from first message
+    if session.title == "New App" and len(body.message) > 3:
+        session.title = body.message[:60].strip()
         db.commit()
 
-    # Build conversation history for Claude
+    # Build conversation history
     history = (
         db.query(BuilderMessage)
         .filter(BuilderMessage.session_id == session.id)
@@ -185,53 +165,49 @@ def chat(
     )
     messages = [{"role": m.role.value, "content": m.content} for m in history]
 
-    client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
-
     def generate():
         full_response = ""
-        input_tokens = 0
-        output_tokens = 0
+        total_tokens = 0
+        model_used = "unknown"
 
-        try:
-            with client.messages.stream(
-                model="claude-sonnet-4-6",
-                max_tokens=8192,
-                system=SYSTEM_PROMPT,
-                messages=messages,
-            ) as stream:
-                for text in stream.text_stream:
-                    full_response += text
-                    # SSE format
-                    yield f"data: {json.dumps({'type': 'text', 'text': text})}\n\n"
+        for event_type, payload in llm_router.stream(
+            messages=messages,
+            system=SYSTEM_PROMPT,
+            prompt=body.message,
+        ):
+            if event_type == "meta":
+                model_used = payload.model
+                # Send routing info to the client
+                yield f"data: {json.dumps({'type': 'meta', 'model': payload.model, 'complexity': payload.complexity})}\n\n"
 
-                # Final usage stats
-                msg = stream.get_final_message()
-                input_tokens = msg.usage.input_tokens
-                output_tokens = msg.usage.output_tokens
+            elif event_type == "text":
+                full_response += payload
+                yield f"data: {json.dumps({'type': 'text', 'text': payload})}\n\n"
 
-        except anthropic.APIError as e:
-            yield f"data: {json.dumps({'type': 'error', 'text': str(e)})}\n\n"
-            return
+            elif event_type == "done":
+                total_tokens = int(payload) if payload else 0
 
-        # Save assistant message and update token count
-        total_tokens = input_tokens + output_tokens
-        assistant_msg = BuilderMessage(
-            session_id=session.id,
-            role=MessageRole.assistant,
-            content=full_response,
-            tokens_used=total_tokens,
-        )
-        db.add(assistant_msg)
-        current_user.tokens_used_month += total_tokens
-        db.commit()
+                # Save assistant message
+                assistant_msg = BuilderMessage(
+                    session_id=session.id,
+                    role=MessageRole.assistant,
+                    content=full_response,
+                    tokens_used=total_tokens,
+                )
+                db.add(assistant_msg)
 
-        yield f"data: {json.dumps({'type': 'done', 'tokens': total_tokens})}\n\n"
+                # Update session model and user token count
+                session.model_used = model_used
+                current_user.tokens_used_month += total_tokens
+                db.commit()
+
+                yield f"data: {json.dumps({'type': 'done', 'tokens': total_tokens, 'model': model_used})}\n\n"
+
+            elif event_type == "error":
+                yield f"data: {json.dumps({'type': 'error', 'text': payload})}\n\n"
 
     return StreamingResponse(
         generate(),
         media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",  # disables Nginx buffering for SSE
-        },
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
