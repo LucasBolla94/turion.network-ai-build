@@ -1,0 +1,38 @@
+# Dependencias
+node_modules/
+.pnpm-store/
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Build
+.next/
+dist/
+build/
+*.egg-info/
+
+# Ambiente — NUNCA commitar o .env real
+.env
+.env.local
+.env.production
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editores
+.vscode/
+.idea/
+
+# Python
+*.pyo
+.pytest_cache/
+
+# Uploads / storage local
+uploads/
+storage/

@@ -1,0 +1,18 @@
+{
+  "name": "turion-network",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Turion Network — AI App Builder Platform",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"pnpm --filter web dev\" \"pnpm --filter api dev\"",
+    "build": "pnpm --filter web build",
+    "start": "pnpm --filter web start"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0"
+  }
+}
