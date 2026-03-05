@@ -1,6 +1,13 @@
 import Link from "next/link";
+import { getTranslations } from "@/i18n/translations";
+import { prices } from "@/i18n/prices";
 
+// Default locale is English, currency GBP
+// Locale switching is handled client-side via a toggle component
 export default function HomePage() {
+  const t = getTranslations("en");
+  const p = prices["GBP"];
+
   return (
     <main className="min-h-screen flex flex-col" style={{ background: "var(--background)" }}>
       {/* Navbar */}
@@ -13,13 +20,13 @@ export default function HomePage() {
         </div>
         <div className="flex items-center gap-4">
           <Link href="/login" className="text-[var(--muted)] hover:text-white transition-colors text-sm">
-            Entrar
+            {t.nav.signin}
           </Link>
           <Link
             href="/register"
             className="bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white text-sm px-4 py-2 rounded-lg transition-colors font-medium"
           >
-            Comecar gratis
+            {t.nav.start}
           </Link>
         </div>
       </nav>
@@ -28,17 +35,16 @@ export default function HomePage() {
       <section className="flex-1 flex flex-col items-center justify-center px-6 py-24 text-center">
         <div className="inline-flex items-center gap-2 bg-[var(--surface)] border border-[var(--border)] rounded-full px-4 py-1.5 text-sm text-[var(--muted)] mb-8">
           <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-          Plataforma em construcao — em breve!
+          {t.hero.badge}
         </div>
 
         <h1 className="text-5xl md:text-7xl font-bold text-white mb-6 leading-tight max-w-4xl">
-          Crie apps completos com{" "}
-          <span className="text-[var(--brand)]">Inteligencia Artificial</span>
+          {t.hero.title1}{" "}
+          <span className="text-[var(--brand)]">{t.hero.title2}</span>
         </h1>
 
         <p className="text-[var(--muted)] text-xl md:text-2xl max-w-2xl mb-10 leading-relaxed">
-          Descreva o que voce quer construir. Nossa IA escreve o codigo, cria o
-          banco de dados e publica o app com um subdominio proprio — em minutos.
+          {t.hero.subtitle}
         </p>
 
         <div className="flex flex-col sm:flex-row gap-4 mb-16">
@@ -46,19 +52,26 @@ export default function HomePage() {
             href="/register"
             className="bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white px-8 py-4 rounded-xl text-lg font-semibold transition-all hover:scale-105"
           >
-            Comecar gratis →
+            {t.hero.cta_primary}
           </Link>
           <Link
-            href="#como-funciona"
+            href="#features"
             className="border border-[var(--border)] hover:border-[var(--muted)] text-white px-8 py-4 rounded-xl text-lg font-medium transition-colors"
           >
-            Ver como funciona
+            {t.hero.cta_secondary}
           </Link>
         </div>
 
         {/* Features grid */}
-        <div id="como-funciona" className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl w-full mt-8">
-          {features.map((f) => (
+        <div id="features" className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl w-full mt-8">
+          {[
+            { icon: "🤖", title: t.features.ai_title, desc: t.features.ai_desc },
+            { icon: "⚡", title: t.features.deploy_title, desc: t.features.deploy_desc },
+            { icon: "🗄️", title: t.features.db_title, desc: t.features.db_desc },
+            { icon: "🔒", title: t.features.auth_title, desc: t.features.auth_desc },
+            { icon: "💳", title: t.features.payments_title, desc: t.features.payments_desc },
+            { icon: "🌐", title: t.features.domain_title, desc: t.features.domain_desc },
+          ].map((f) => (
             <div
               key={f.title}
               className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-6 text-left hover:border-[var(--brand)] transition-colors"
@@ -71,110 +84,78 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Planos */}
+      {/* Pricing */}
       <section className="border-t border-[var(--border)] px-6 py-20">
         <div className="max-w-5xl mx-auto">
-          <h2 className="text-3xl font-bold text-white text-center mb-12">Planos simples e acessiveis</h2>
+          <h2 className="text-3xl font-bold text-white text-center mb-12">{t.plans.title}</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {plans.map((plan) => (
-              <div
-                key={plan.name}
-                className={`rounded-2xl p-6 border ${
-                  plan.highlight
-                    ? "bg-[var(--brand)] border-[var(--brand)] text-white"
-                    : "bg-[var(--surface)] border-[var(--border)] text-white"
-                }`}
+            {/* Free */}
+            <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-6 text-white">
+              <div className="text-sm font-medium mb-2 opacity-80">{t.plans.free.name}</div>
+              <div className="text-4xl font-bold mb-1">£0</div>
+              <div className="text-sm opacity-60 mb-6">{t.plans.free.period}</div>
+              <ul className="space-y-2">
+                {t.plans.free.features.map((f) => (
+                  <li key={f} className="flex items-center gap-2 text-sm opacity-90">
+                    <span>✓</span> {f}
+                  </li>
+                ))}
+              </ul>
+              <Link
+                href="/register"
+                className="mt-6 block text-center py-3 rounded-lg font-medium text-sm transition-colors bg-[var(--brand)] text-white hover:bg-[var(--brand-hover)]"
               >
-                <div className="text-sm font-medium mb-2 opacity-80">{plan.name}</div>
-                <div className="text-4xl font-bold mb-1">{plan.price}</div>
-                <div className="text-sm opacity-60 mb-6">{plan.period}</div>
-                <ul className="space-y-2">
-                  {plan.features.map((feat) => (
-                    <li key={feat} className="flex items-center gap-2 text-sm opacity-90">
-                      <span>✓</span> {feat}
-                    </li>
-                  ))}
-                </ul>
-                <Link
-                  href="/register"
-                  className={`mt-6 block text-center py-3 rounded-lg font-medium text-sm transition-colors ${
-                    plan.highlight
-                      ? "bg-white text-[var(--brand)] hover:bg-gray-100"
-                      : "bg-[var(--brand)] text-white hover:bg-[var(--brand-hover)]"
-                  }`}
-                >
-                  {plan.cta}
-                </Link>
-              </div>
-            ))}
+                {t.plans.free.cta}
+              </Link>
+            </div>
+
+            {/* Pro — highlighted */}
+            <div className="bg-[var(--brand)] border border-[var(--brand)] rounded-2xl p-6 text-white">
+              <div className="text-sm font-medium mb-2 opacity-80">{t.plans.pro.name}</div>
+              <div className="text-4xl font-bold mb-1">{p.pro}</div>
+              <div className="text-sm opacity-60 mb-6">{t.plans.pro.period}</div>
+              <ul className="space-y-2">
+                {t.plans.pro.features.map((f) => (
+                  <li key={f} className="flex items-center gap-2 text-sm opacity-90">
+                    <span>✓</span> {f}
+                  </li>
+                ))}
+              </ul>
+              <Link
+                href="/register"
+                className="mt-6 block text-center py-3 rounded-lg font-medium text-sm transition-colors bg-white text-[var(--brand)] hover:bg-gray-100"
+              >
+                {t.plans.pro.cta}
+              </Link>
+            </div>
+
+            {/* Team */}
+            <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-6 text-white">
+              <div className="text-sm font-medium mb-2 opacity-80">{t.plans.team.name}</div>
+              <div className="text-4xl font-bold mb-1">{p.team}</div>
+              <div className="text-sm opacity-60 mb-6">{t.plans.team.period}</div>
+              <ul className="space-y-2">
+                {t.plans.team.features.map((f) => (
+                  <li key={f} className="flex items-center gap-2 text-sm opacity-90">
+                    <span>✓</span> {f}
+                  </li>
+                ))}
+              </ul>
+              <Link
+                href="/register"
+                className="mt-6 block text-center py-3 rounded-lg font-medium text-sm transition-colors bg-[var(--brand)] text-white hover:bg-[var(--brand-hover)]"
+              >
+                {t.plans.team.cta}
+              </Link>
+            </div>
           </div>
         </div>
       </section>
 
       {/* Footer */}
       <footer className="border-t border-[var(--border)] px-6 py-8 text-center text-[var(--muted)] text-sm">
-        <p>© 2026 Turion Network. Todos os direitos reservados.</p>
+        <p>{t.footer}</p>
       </footer>
     </main>
   );
 }
-
-const features = [
-  {
-    icon: "🤖",
-    title: "IA Multi-Modelo",
-    desc: "Roteamento inteligente entre GPT-4o, Claude 3.7, Gemini 2.5 e mais. O melhor modelo e escolhido automaticamente para cada tarefa.",
-  },
-  {
-    icon: "⚡",
-    title: "Deploy em 1 Clique",
-    desc: "Seu app fica disponivel em nome.turion.network em segundos, com SSL automatico e zero configuracao.",
-  },
-  {
-    icon: "🗄️",
-    title: "Banco de Dados Incluido",
-    desc: "PostgreSQL configurado automaticamente para cada projeto. Sem servidores para gerenciar.",
-  },
-  {
-    icon: "🔒",
-    title: "Autenticacao Pronta",
-    desc: "Login, registro e controle de usuarios ja vem incluido em cada app gerado pela plataforma.",
-  },
-  {
-    icon: "💳",
-    title: "Pagamentos com Stripe",
-    desc: "Integre Stripe no seu app com 1 clique. Aceite cartao, PIX e assinaturas sem esforco.",
-  },
-  {
-    icon: "🌐",
-    title: "Dominio Proprio",
-    desc: "Use o subdominio gratuito ou aponte seu proprio dominio. SSL automatico em ambos os casos.",
-  },
-];
-
-const plans = [
-  {
-    name: "Free",
-    price: "R$ 0",
-    period: "para sempre",
-    highlight: false,
-    cta: "Comecar gratis",
-    features: ["3 apps ativos", "Subdominio .turion.network", "100k tokens/mes", "Banco de dados incluido"],
-  },
-  {
-    name: "Pro",
-    price: "R$ 97",
-    period: "por mes",
-    highlight: true,
-    cta: "Assinar Pro",
-    features: ["Apps ilimitados", "Dominio proprio", "2M tokens/mes", "Suporte prioritario", "Sem cold start"],
-  },
-  {
-    name: "Team",
-    price: "R$ 247",
-    period: "por mes",
-    highlight: false,
-    cta: "Assinar Team",
-    features: ["Tudo do Pro", "5 colaboradores", "10M tokens/mes", "CI/CD automatico", "SLA 99.9%"],
-  },
-];

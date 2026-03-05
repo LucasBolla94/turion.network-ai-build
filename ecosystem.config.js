@@ -19,6 +19,7 @@ module.exports = {
       name: "turion-api",
       cwd: "./apps/api",
       script: "venv/bin/uvicorn",
+      interpreter: "none",
       args: "main:app --host 0.0.0.0 --port 8000 --workers 4",
       autorestart: true,
       watch: false,
