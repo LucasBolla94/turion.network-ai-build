@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getToken, getUser, clearSession } from "@/lib/auth-store";
+import { appsApi, type UserPublic } from "@/lib/api";
 
 const API = "/api-backend/v1";
 
@@ -103,6 +104,9 @@ export default function BuilderPage() {
   const [previewHtml, setPreviewHtml] = useState("");
   const [previewFiles, setPreviewFiles] = useState<ParsedFile[]>([]);
   const [selectedFile, setSelectedFile] = useState<ParsedFile | null>(null);
+  const [modelUsed, setModelUsed] = useState<string | null>(null);
+  const [complexity, setComplexity] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -257,7 +261,10 @@ export default function BuilderPage() {
           if (!line.startsWith("data: ")) continue;
           try {
             const event = JSON.parse(line.slice(6));
-            if (event.type === "text") {
+            if (event.type === "meta") {
+              setModelUsed(event.model);
+              setComplexity(event.complexity);
+            } else if (event.type === "text") {
               buffer += event.text;
               setMessages(prev => prev.map(m =>
                 m.id === assistantMsg.id ? { ...m, content: buffer } : m
@@ -288,6 +295,19 @@ export default function BuilderPage() {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
+    }
+  }
+
+  async function saveAsApp() {
+    if (!activeSession || saving) return;
+    setSaving(true);
+    try {
+      await appsApi.fromSession(activeSession.id, activeSession.title);
+      router.push("/dashboard/apps");
+    } catch (e: unknown) {
+      alert((e as Error).message ?? "Failed to save app");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -354,9 +374,35 @@ export default function BuilderPage() {
               {tab === "preview" ? "👁 Preview" : tab === "files" ? `📁 Files ${hasFiles ? `(${previewFiles.length})` : ""}` : "💬 Chat"}
             </button>
           ))}
-          {activeSession && (
-            <span className="ml-auto text-xs text-[var(--muted)] truncate max-w-xs">{activeSession.title}</span>
-          )}
+          <div className="ml-auto flex items-center gap-2">
+            {modelUsed && (
+              <div className="flex items-center gap-1.5">
+                {sending && <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />}
+                <span className="text-xs bg-[var(--surface)] border border-[var(--border)] text-[var(--muted)] px-2.5 py-1 rounded-full font-mono">
+                  {modelUsed.replace("openai/","").replace("anthropic/","")}
+                </span>
+                {complexity && (
+                  <span className={`text-xs px-2 py-1 rounded-full font-medium capitalize ${
+                    complexity === "high" ? "bg-purple-500/20 text-purple-400" :
+                    complexity === "medium" ? "bg-blue-500/20 text-blue-400" :
+                    "bg-green-500/20 text-green-400"
+                  }`}>{complexity}</span>
+                )}
+              </div>
+            )}
+            {hasFiles && activeSession && (
+              <button onClick={saveAsApp} disabled={saving || sending}
+                className="px-4 py-1.5 rounded-lg text-sm font-medium bg-green-600 hover:bg-green-500 text-white transition-colors disabled:opacity-50 flex items-center gap-1.5">
+                {saving
+                  ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Saving…</>
+                  : "Save as App"
+                }
+              </button>
+            )}
+            {activeSession && (
+              <span className="text-xs text-[var(--muted)] truncate max-w-xs hidden sm:block">{activeSession.title}</span>
+            )}
+          </div>
         </div>
 
         {/* Content area */}
@@ -432,7 +478,18 @@ export default function BuilderPage() {
                   </button>
                 </div>
                 <p className="text-xs text-[var(--muted)] mt-2 text-center">
-                  {user ? `${user.plan} plan · ${user.tokens_used_month.toLocaleString()} tokens used this month` : ""}
+                  {user ? (
+                    <>
+                      <span className="capitalize">{user.plan}</span> plan
+                      {" · "}
+                      {user.tokens_used_month.toLocaleString()} tokens used this month
+                      {user.tokens_topup_balance > 0 && (
+                        <span className="text-green-400 ml-2">
+                          + {user.tokens_topup_balance.toLocaleString()} top-up
+                        </span>
+                      )}
+                    </>
+                  ) : ""}
                 </p>
               </div>
             </>

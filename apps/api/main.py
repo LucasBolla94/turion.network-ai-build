@@ -9,6 +9,7 @@ from app.api.v1.router import api_router
 import app.models.user       # noqa
 import app.models.app_project # noqa
 import app.models.builder     # noqa
+import app.models.app_file    # noqa
 
 
 @asynccontextmanager

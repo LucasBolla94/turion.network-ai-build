@@ -11,14 +11,9 @@ from app.models.user import User, PlanType
 from app.api.v1.deps import get_current_user
 from app.services.builder_prompt import SYSTEM_PROMPT
 from app.services import router as llm_router
+from app.services.pricing import MONTHLY_TOKEN_LIMITS
 
 router = APIRouter(prefix="/builder", tags=["AI Builder"])
-
-TOKEN_LIMITS = {
-    PlanType.free: 100_000,
-    PlanType.pro: 2_000_000,
-    PlanType.team: 10_000_000,
-}
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
@@ -51,12 +46,32 @@ class ChatRequest(BaseModel):
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _check_quota(user: User):
-    limit = TOKEN_LIMITS[user.plan]
-    if user.tokens_used_month >= limit:
+    monthly_limit     = MONTHLY_TOKEN_LIMITS[user.plan]
+    monthly_remaining = max(0, monthly_limit - user.tokens_used_month)
+    total_available   = monthly_remaining + user.tokens_topup_balance
+
+    if total_available <= 0:
         raise HTTPException(
             status_code=429,
-            detail=f"Monthly token limit reached ({limit:,} tokens). Please upgrade your plan.",
+            detail=(
+                f"No tokens available. Monthly limit ({monthly_limit:,}) reached "
+                "and no top-up balance. Please upgrade or buy more tokens."
+            ),
         )
+
+
+def _deduct_tokens(user: User, tokens_used: int):
+    """Deduct tokens: monthly allocation first, then topup balance."""
+    monthly_limit     = MONTHLY_TOKEN_LIMITS[user.plan]
+    monthly_remaining = max(0, monthly_limit - user.tokens_used_month)
+
+    if tokens_used <= monthly_remaining:
+        user.tokens_used_month += tokens_used
+    else:
+        # Exhaust remaining monthly tokens, deduct overflow from topup
+        overflow = tokens_used - monthly_remaining
+        user.tokens_used_month = monthly_limit
+        user.tokens_topup_balance = max(0, user.tokens_topup_balance - overflow)
 
 
 def _get_session(db: Session, session_id: str, user: User) -> BuilderSession:
@@ -174,6 +189,7 @@ def chat(
             messages=messages,
             system=SYSTEM_PROMPT,
             prompt=body.message,
+            free_plan=(current_user.plan == PlanType.free),
         ):
             if event_type == "meta":
                 model_used = payload.model
@@ -196,9 +212,9 @@ def chat(
                 )
                 db.add(assistant_msg)
 
-                # Update session model and user token count
+                # Update session model and deduct tokens (monthly first, then topup)
                 session.model_used = model_used
-                current_user.tokens_used_month += total_tokens
+                _deduct_tokens(current_user, total_tokens)
                 db.commit()
 
                 yield f"data: {json.dumps({'type': 'done', 'tokens': total_tokens, 'model': model_used})}\n\n"

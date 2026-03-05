@@ -34,8 +34,9 @@ class User(Base):
     stripe_subscription_id = Column(String(255), nullable=True)
 
     # Usage
-    tokens_used_month = Column(Integer, default=0)
-    apps_count = Column(Integer, default=0)
+    tokens_used_month    = Column(Integer, default=0)  # resets monthly
+    tokens_topup_balance = Column(Integer, default=0)  # purchased, never expires
+    apps_count           = Column(Integer, default=0)
 
     # i18n preference
     locale = Column(String(10), default="en", nullable=False)

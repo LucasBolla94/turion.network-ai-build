@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     XAI_API_KEY: str = ""
     GROQ_API_KEY: str = ""
     GOOGLE_API_KEY: str = ""
+    ZAI_API_KEY: str = ""
 
     class Config:
         env_file = ".env"

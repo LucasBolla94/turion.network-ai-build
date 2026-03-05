@@ -49,6 +49,7 @@ class UserPublic(BaseModel):
     locale: str
     is_verified: bool
     tokens_used_month: int
+    tokens_topup_balance: int
     apps_count: int
     created_at: datetime
 
