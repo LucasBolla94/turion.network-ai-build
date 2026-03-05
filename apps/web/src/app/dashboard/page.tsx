@@ -1,16 +1,38 @@
-import Link from "next/link";
+"use client";
 
-const mockApps = [
-  { id: "1", name: "landing-page-loja", url: "landing-page-loja.turion.network", status: "online", updated: "2 min atras" },
-  { id: "2", name: "crm-interno", url: "crm-interno.turion.network", status: "building", updated: "5 min atras" },
-  { id: "3", name: "chatbot-suporte", url: "chatbot-suporte.turion.network", status: "online", updated: "1h atras" },
-];
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { auth, type UserPublic } from "@/lib/api";
+import { getUser, clearSession } from "@/lib/auth-store";
 
 export default function DashboardPage() {
+  const router = useRouter();
+  const [user, setUser] = useState<UserPublic | null>(null);
+
+  useEffect(() => {
+    // Load cached user immediately, then refresh from API
+    const cached = getUser();
+    if (cached) setUser(cached);
+
+    auth.me().then(setUser).catch(() => {
+      clearSession();
+      router.replace("/login");
+    });
+  }, [router]);
+
+  function handleLogout() {
+    clearSession();
+    router.push("/");
+  }
+
+  const planLimit = { free: "100k", pro: "2M", team: "10M" };
+  const planColor = { free: "text-gray-400", pro: "text-blue-400", team: "text-purple-400" };
+
   return (
     <div className="min-h-screen" style={{ background: "var(--background)" }}>
-      {/* Sidebar */}
       <div className="flex h-screen">
+        {/* Sidebar */}
         <aside className="w-60 border-r border-[var(--border)] flex flex-col p-4 shrink-0">
           <div className="flex items-center gap-2 mb-8">
             <div className="w-8 h-8 rounded-lg bg-[var(--brand)] flex items-center justify-center">
@@ -18,6 +40,7 @@ export default function DashboardPage() {
             </div>
             <span className="text-white font-semibold">Turion</span>
           </div>
+
           <nav className="space-y-1 flex-1">
             {sidebarItems.map((item) => (
               <Link
@@ -30,85 +53,87 @@ export default function DashboardPage() {
               </Link>
             ))}
           </nav>
+
           <div className="border-t border-[var(--border)] pt-4">
-            <div className="flex items-center gap-3 px-3 py-2">
-              <div className="w-8 h-8 rounded-full bg-[var(--brand)] flex items-center justify-center text-white text-xs font-bold">U</div>
-              <div>
-                <div className="text-white text-sm font-medium">Usuario</div>
-                <div className="text-[var(--muted)] text-xs">Plano Free</div>
+            {user && (
+              <div className="px-3 py-2 mb-2">
+                <div className="text-white text-sm font-medium truncate">{user.name}</div>
+                <div className="text-[var(--muted)] text-xs truncate">{user.email}</div>
+                <span className={`text-xs font-medium uppercase tracking-wide mt-1 block ${planColor[user.plan]}`}>
+                  {user.plan} plan
+                </span>
               </div>
-            </div>
+            )}
+            <button
+              onClick={handleLogout}
+              className="w-full text-left px-3 py-2 rounded-lg text-[var(--muted)] hover:text-red-400 hover:bg-red-500/10 transition-colors text-sm"
+            >
+              Sign out
+            </button>
           </div>
         </aside>
 
-        {/* Main content */}
+        {/* Main */}
         <main className="flex-1 overflow-auto p-8">
           <div className="flex items-center justify-between mb-8">
             <div>
-              <h1 className="text-2xl font-bold text-white">Meus Apps</h1>
-              <p className="text-[var(--muted)] text-sm mt-1">Gerencie e crie seus projetos</p>
+              <h1 className="text-2xl font-bold text-white">
+                {user ? `Welcome, ${user.name.split(" ")[0]}` : "Dashboard"}
+              </h1>
+              <p className="text-[var(--muted)] text-sm mt-1">Manage and create your projects</p>
             </div>
             <Link
               href="/dashboard/new"
               className="bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white px-5 py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
             >
-              <span>+</span> Novo App
+              + New App
             </Link>
           </div>
 
-          {/* Apps list */}
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {mockApps.map((app) => (
-              <div
-                key={app.id}
-                className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-5 hover:border-[var(--brand)] transition-colors cursor-pointer"
-              >
-                <div className="flex items-start justify-between mb-3">
-                  <div className="w-10 h-10 rounded-xl bg-[var(--brand)]/20 flex items-center justify-center text-[var(--brand)] font-bold">
-                    {app.name[0].toUpperCase()}
-                  </div>
-                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-                    app.status === "online"
-                      ? "bg-green-500/20 text-green-400"
-                      : "bg-yellow-500/20 text-yellow-400"
-                  }`}>
-                    {app.status === "online" ? "Online" : "Publicando..."}
-                  </span>
-                </div>
-                <h3 className="text-white font-medium mb-1">{app.name}</h3>
-                <p className="text-[var(--muted)] text-xs mb-4">{app.url}</p>
-                <div className="flex items-center justify-between text-xs text-[var(--muted)]">
-                  <span>Atualizado {app.updated}</span>
-                  <div className="flex gap-2">
-                    <button className="hover:text-white transition-colors">Editar</button>
-                    <span>·</span>
-                    <a href={`https://${app.url}`} target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">
-                      Ver site
-                    </a>
-                  </div>
+          {/* Stats from real user data */}
+          {user && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+              <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-5">
+                <div className="text-[var(--muted)] text-sm mb-1">Active Apps</div>
+                <div className="text-2xl font-bold text-white">{user.apps_count}</div>
+                <div className="text-xs text-[var(--muted)] mt-1">
+                  {user.plan === "free" ? `of 3 on Free plan` : "Unlimited"}
                 </div>
               </div>
-            ))}
+              <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-5">
+                <div className="text-[var(--muted)] text-sm mb-1">Tokens this month</div>
+                <div className="text-2xl font-bold text-white">
+                  {user.tokens_used_month.toLocaleString()}
+                </div>
+                <div className="text-xs text-[var(--muted)] mt-1">
+                  of {planLimit[user.plan]} available
+                </div>
+              </div>
+              <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-5">
+                <div className="text-[var(--muted)] text-sm mb-1">Plan</div>
+                <div className={`text-2xl font-bold capitalize ${planColor[user.plan]}`}>
+                  {user.plan}
+                </div>
+                <Link href="/dashboard/billing" className="text-xs text-[var(--brand)] hover:underline mt-1 block">
+                  {user.plan === "free" ? "Upgrade →" : "Manage plan →"}
+                </Link>
+              </div>
+            </div>
+          )}
 
-            {/* Card de novo app */}
+          {/* Empty state — no apps yet */}
+          <div className="bg-[var(--surface)] border border-dashed border-[var(--border)] rounded-2xl p-16 flex flex-col items-center justify-center text-center">
+            <div className="text-5xl mb-4">🚀</div>
+            <h3 className="text-white font-semibold text-lg mb-2">Create your first app</h3>
+            <p className="text-[var(--muted)] text-sm mb-6 max-w-sm">
+              Describe what you want to build in plain language and our AI will generate it for you in minutes.
+            </p>
             <Link
               href="/dashboard/new"
-              className="bg-[var(--surface)] border border-dashed border-[var(--border)] rounded-2xl p-5 hover:border-[var(--brand)] transition-colors flex flex-col items-center justify-center gap-3 min-h-[160px] text-[var(--muted)] hover:text-white"
+              className="bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white px-6 py-3 rounded-lg text-sm font-medium transition-colors"
             >
-              <span className="text-3xl">+</span>
-              <span className="text-sm font-medium">Criar novo app</span>
+              Start building →
             </Link>
-          </div>
-
-          {/* Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8">
-            {stats.map((stat) => (
-              <div key={stat.label} className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-5">
-                <div className="text-[var(--muted)] text-sm mb-1">{stat.label}</div>
-                <div className="text-2xl font-bold text-white">{stat.value}</div>
-                <div className="text-xs text-green-400 mt-1">{stat.change}</div>
-              </div>
-            ))}
           </div>
         </main>
       </div>
@@ -118,16 +143,10 @@ export default function DashboardPage() {
 
 const sidebarItems = [
   { icon: "▦", label: "Dashboard", href: "/dashboard" },
-  { icon: "⚙", label: "Meus Apps", href: "/dashboard/apps" },
+  { icon: "⚙", label: "My Apps", href: "/dashboard/apps" },
   { icon: "🤖", label: "AI Builder", href: "/dashboard/builder" },
-  { icon: "🗄", label: "Banco de Dados", href: "/dashboard/databases" },
-  { icon: "🌐", label: "Dominios", href: "/dashboard/domains" },
-  { icon: "💳", label: "Plano & Billing", href: "/dashboard/billing" },
-  { icon: "⚙", label: "Configuracoes", href: "/dashboard/settings" },
-];
-
-const stats = [
-  { label: "Apps ativos", value: "3", change: "+1 este mes" },
-  { label: "Tokens usados", value: "24.5k", change: "de 100k disponiveis" },
-  { label: "Requests hoje", value: "1,234", change: "+12% vs ontem" },
+  { icon: "🗄", label: "Databases", href: "/dashboard/databases" },
+  { icon: "🌐", label: "Domains", href: "/dashboard/domains" },
+  { icon: "💳", label: "Billing", href: "/dashboard/billing" },
+  { icon: "⚙", label: "Settings", href: "/dashboard/settings" },
 ];
